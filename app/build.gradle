@@ -4,7 +4,7 @@ plugins {
 
 android {
     compileSdkVersion 30
-
+    namespace 'com.jiashuai.touchlayoutapplication'
     defaultConfig {
         applicationId "com.jiashuai.touchlayoutapplication"
         minSdkVersion 21
