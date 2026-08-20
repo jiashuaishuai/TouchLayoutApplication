@@ -18,7 +18,7 @@ import android.widget.FrameLayout;
 import java.util.ArrayList;
 import java.util.List;
 
-public abstract class ChartTouchLayout extends FrameLayout {
+public class ChartTouchLayout extends FrameLayout {
     private boolean isEdit = true;
     private boolean isDispatchTouch;//是否拦截
     private SparseArray<ViewTouchModel> mComponentRectList; //二维组建集合
@@ -35,6 +35,7 @@ public abstract class ChartTouchLayout extends FrameLayout {
     private boolean multiSelectMove;//手指点击是否在多选矩阵区域 true 是再多选矩阵区域可以移动，false  不在多选区矩阵区域不可移动
     private int mMultiSelectedRectMoveStartX;//多选矩阵 x down坐标
     private int mMultiSelectedRectMoveStartY;
+    private final Rect mMultiSelectedMoveOriginRect = new Rect();//组合拖拽开始时的选区
 
 
     private Paint mComponentDatumLinePaint;//二维组建基线画笔
@@ -46,6 +47,8 @@ public abstract class ChartTouchLayout extends FrameLayout {
     private int touchPointSize = 20;//触控点绘制范围
     private int touchPointRadius = 2;//触控点圆角
     private int touchPointRimSize = 3;//触控点边线
+    private boolean snapEnabled = true;//是否开启自动吸附
+    private int snapThreshold = 20;//吸附距离，单位 px
 
 
     public boolean isMultiSelected() {
@@ -65,17 +68,24 @@ public abstract class ChartTouchLayout extends FrameLayout {
         return isEdit;
     }
 
-//    //View至底
-//    public void bringChildToBehind(View view) {
-//        final int index = indexOfChild(view);
-//        if (index > 0) {
-//            detachViewFromParent(index);
-//            attachViewToParent(view, 0, view.getLayoutParams());
-////            requestLayout();
-////            invalidate();
-//        }
-////        bringChildToFront();//view置顶
-//    }
+    public boolean isSnapEnabled() {
+        return snapEnabled;
+    }
+
+    public void setSnapEnabled(boolean snapEnabled) {
+        this.snapEnabled = snapEnabled;
+    }
+
+    /**
+     * 设置吸附距离，单位 px。
+     */
+    public void setSnapThreshold(int snapThreshold) {
+        this.snapThreshold = Math.max(0, snapThreshold);
+    }
+
+    public int getSnapThreshold() {
+        return snapThreshold;
+    }
 
     /**
      * 重置选区
@@ -86,8 +96,6 @@ public abstract class ChartTouchLayout extends FrameLayout {
         mDatumLineRect.setEmpty();
         postInvalidateOnAnimation();
     }
-
-    private static final String TAG = ChartTouchLayout.class.getSimpleName();
 
     public ChartTouchLayout(Context context) {
         this(context, null);
@@ -168,10 +176,6 @@ public abstract class ChartTouchLayout extends FrameLayout {
 
     }
 
-    protected void setScaleMode(int viewId,int ScaleMode){
-
-    }
-
     @Override
     public void addView(View child, int index, ViewGroup.LayoutParams params) {
         if (!checkLayoutParams(params)) {
@@ -188,7 +192,7 @@ public abstract class ChartTouchLayout extends FrameLayout {
             lp.height = mHeight;
         }
         Rect rect = new Rect();
-        rect.left = lp.leftMargin;
+        rect.left = lp.getMarginStart();
         rect.top = lp.topMargin;
         rect.right = rect.left + lp.width;
         rect.bottom = rect.top + lp.height;
@@ -199,8 +203,12 @@ public abstract class ChartTouchLayout extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (!isEdit)
-            super.onTouchEvent(event);
+        if (!isEdit) {
+            return super.onTouchEvent(event);
+        }
+        if (clickEvent(event)) {
+            performClick();
+        }
         if (!multipleChoiceArray.isEmpty()) {
             if (changeSizeEvent(event, multipleChoiceArray))
                 return true;
@@ -270,6 +278,7 @@ public abstract class ChartTouchLayout extends FrameLayout {
                 if (viewTouchModel != null) {
                     viewTouchModel.moveStartX = x;
                     viewTouchModel.moveStartY = y;
+                    viewTouchModel.moveOriginRect.set(viewTouchModel.rect);
                 } else {
                     multipleChoiceArray.clear();//如果点击二维组建以外的区域清空
                     postInvalidateOnAnimation();
@@ -284,15 +293,16 @@ public abstract class ChartTouchLayout extends FrameLayout {
                     int moveY = (int) event.getY(i);
                     int offsetX = moveX - multiView.moveStartX;
                     int offsetY = moveY - multiView.moveStartY;
-                    multiView.moveStartX = moveX;
-                    multiView.moveStartY = moveY;
-                    offsetX = offsetXBoundary(offsetX, multiView.rect.left, multiView.rect.right);
-                    offsetY = offsetYBoundary(offsetY, multiView.rect.top, multiView.rect.bottom);
                     if (offsetIsMove(offsetX, offsetY)) {//判断最小偏移量，，
                         multiView.isMove = true;
                     }
                     if (multiView.isMove) {//如果移动距离大于最小偏移量，则认为是滑动事件
-                        multiView.rect.offset(offsetX, offsetY);
+                        Rect targetRect = new Rect(multiView.moveOriginRect);
+                        targetRect.offset(offsetX, offsetY);
+                        rectBoundary(targetRect);
+                        applySnap(targetRect, multiTouchArray);
+                        rectBoundary(targetRect);
+                        multiView.rect.set(targetRect);
                         if (i == 0) {
                             mDatumLineRect.set(multiView.rect);
                         }
@@ -358,20 +368,22 @@ public abstract class ChartTouchLayout extends FrameLayout {
      * @param event
      * @return
      */
-    private ViewTouchModel multiSelectedCurrentTouchViewModel;
-
-
     private boolean multiSelectedEvent(MotionEvent event) {
         int x = (int) event.getX();
         int y = (int) event.getY();
         boolean isClick = clickEvent(event);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-            case MotionEvent.ACTION_POINTER_DOWN:
                 multiSelectMove = mMultiSelectedRect.contains(x, y);
                 mMultiSelectedRectMoveStartX = x;
                 mMultiSelectedRectMoveStartY = y;
                 pointerId = event.getPointerId(0);
+                if (multiSelectMove) {
+                    mMultiSelectedMoveOriginRect.set(mMultiSelectedRect);
+                    for (ViewTouchModel model : multipleChoiceArray) {
+                        model.moveOriginRect.set(model.rect);
+                    }
+                }
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (multiSelectMove && event.findPointerIndex(pointerId) == 0) {
@@ -379,28 +391,25 @@ public abstract class ChartTouchLayout extends FrameLayout {
                     int moveY = (int) event.getY(event.findPointerIndex(pointerId));
                     int offsetX = moveX - mMultiSelectedRectMoveStartX;
                     int offsetY = moveY - mMultiSelectedRectMoveStartY;
-                    mMultiSelectedRectMoveStartX = moveX;
-                    mMultiSelectedRectMoveStartY = moveY;
-                    offsetX = offsetXBoundary(offsetX, mMultiSelectedRect.left, mMultiSelectedRect.right);
-                    offsetY = offsetYBoundary(offsetY, mMultiSelectedRect.top, mMultiSelectedRect.bottom);
                     if (offsetIsMove(offsetX, offsetY)) {//判断最小偏移量，，
                         multiSelectedRectIsMove = true;
                     }
                     if (multiSelectedRectIsMove) {
-                        mMultiSelectedRect.offset(offsetX, offsetY);
-                    }
-                    for (int i = 0; i < multipleChoiceArray.size(); i++) {
-                        ViewTouchModel multipleChoice = multipleChoiceArray.get(i);
-                        if (multiSelectedRectIsMove) {
-                            multipleChoice.rect.offset(offsetX, offsetY);
-                            if (multipleChoice.rect.contains(x, y)) {
-                                multiSelectedCurrentTouchViewModel = multipleChoice;
-                            }
-                        }
+                        Rect targetRect = new Rect(mMultiSelectedMoveOriginRect);
+                        targetRect.offset(offsetX, offsetY);
+                        rectBoundary(targetRect);
+                        applySnap(targetRect, multipleChoiceArray);
+                        rectBoundary(targetRect);
 
-                    }
-                    if (multiSelectedCurrentTouchViewModel != null) {
-                        mDatumLineRect.set(multiSelectedCurrentTouchViewModel.rect);
+                        int snappedOffsetX = targetRect.left - mMultiSelectedMoveOriginRect.left;
+                        int snappedOffsetY = targetRect.top - mMultiSelectedMoveOriginRect.top;
+                        mMultiSelectedRect.set(targetRect);
+
+                        for (ViewTouchModel multipleChoice : multipleChoiceArray) {
+                            multipleChoice.rect.set(multipleChoice.moveOriginRect);
+                            multipleChoice.rect.offset(snappedOffsetX, snappedOffsetY);
+                        }
+                        mDatumLineRect.set(mMultiSelectedRect);
                     }
                     if (!multipleChoiceArray.isEmpty()) {
                         requestLayout();
@@ -431,9 +440,6 @@ public abstract class ChartTouchLayout extends FrameLayout {
                         }
                     }
                 }
-                if (multiSelectedCurrentTouchViewModel != null) {
-                    multiSelectedCurrentTouchViewModel = null;
-                }
                 if (!mDatumLineRect.isEmpty()) {
                     mDatumLineRect.setEmpty();
                     postInvalidateOnAnimation();
@@ -447,6 +453,12 @@ public abstract class ChartTouchLayout extends FrameLayout {
         if (isDispatchTouch)
             return true;
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean performClick() {
+        super.performClick();
+        return true;
     }
 
 
@@ -650,6 +662,62 @@ public abstract class ChartTouchLayout extends FrameLayout {
     }
 
     /**
+     * 将移动矩阵吸附到父容器边界，或其他未参与本次拖拽的 View 边缘。
+     * 同时支持相邻边贴合和同侧边对齐；X、Y 方向分别选择距离最近的候选位置。
+     */
+    private void applySnap(Rect movingRect, List<ViewTouchModel> excludedModels) {
+        if (!snapEnabled || snapThreshold <= 0) {
+            return;
+        }
+
+        int noSnapOffset = snapThreshold + 1;
+        int bestOffsetX = findNearestOffset(noSnapOffset,
+                -movingRect.left,
+                mWidth - movingRect.right);
+        int bestOffsetY = findNearestOffset(noSnapOffset,
+                -movingRect.top,
+                mHeight - movingRect.bottom);
+
+        for (int i = 0; i < mComponentRectList.size(); i++) {
+            ViewTouchModel otherModel = mComponentRectList.valueAt(i);
+            if (excludedModels != null && excludedModels.contains(otherModel)) {
+                continue;
+            }
+
+            Rect otherRect = otherModel.rect;
+            bestOffsetX = findNearestOffset(bestOffsetX,
+                    otherRect.left - movingRect.left,
+                    otherRect.right - movingRect.right,
+                    otherRect.left - movingRect.right,
+                    otherRect.right - movingRect.left
+            );
+            bestOffsetY = findNearestOffset(bestOffsetY,
+                    otherRect.top - movingRect.top,
+                    otherRect.bottom - movingRect.bottom,
+                    otherRect.top - movingRect.bottom,
+                    otherRect.bottom - movingRect.top
+            );
+        }
+
+        if (Math.abs(bestOffsetX) <= snapThreshold) {
+            movingRect.offset(bestOffsetX, 0);
+        }
+        if (Math.abs(bestOffsetY) <= snapThreshold) {
+            movingRect.offset(0, bestOffsetY);
+        }
+    }
+
+    private int findNearestOffset(int currentBest, int... candidates) {
+        int best = currentBest;
+        for (int candidate : candidates) {
+            if (Math.abs(candidate) < Math.abs(best)) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    /**
      * 限制 矩阵边界
      *
      * @param rect
@@ -667,42 +735,6 @@ public abstract class ChartTouchLayout extends FrameLayout {
         if (rect.bottom >= mHeight) {
             rect.offset(0, mHeight - rect.bottom);//同理 同right
         }
-    }
-
-    /**
-     * 限制 x轴边界
-     *
-     * @param offsetX
-     * @param left
-     * @param right
-     * @return
-     */
-    private int offsetXBoundary(int offsetX, int left, int right) {
-        if (left + offsetX < 0) {
-            offsetX = 0 - left;
-        }
-        if (right + offsetX > mWidth) {
-            offsetX = mWidth - right;
-        }
-        return offsetX;
-    }
-
-    /**
-     * 限制Y轴边界
-     *
-     * @param offsetY
-     * @param top
-     * @param bottom
-     * @return
-     */
-    private int offsetYBoundary(int offsetY, int top, int bottom) {
-        if (top + offsetY < 0) {
-            offsetY = 0 - top;
-        }
-        if (bottom + offsetY > mHeight) {
-            offsetY = mHeight - bottom;
-        }
-        return offsetY;
     }
 
     /**
@@ -774,12 +806,13 @@ public abstract class ChartTouchLayout extends FrameLayout {
      * 切页重置
      */
     public void resetTouchLayout() {
-        mComponentRectList.clear();
         multiTouchArray.clear();
         resetTouchConstituency();
     }
 
-    protected abstract void saveRectModel(ViewTouchModel viewTouchModel);
+    protected void saveRectModel(ViewTouchModel viewTouchModel) {
+    }
 
-    protected abstract void saveRectModelList(List<ViewTouchModel> multiTouchModelArray);
+    protected void saveRectModelList(List<ViewTouchModel> multiTouchModelArray) {
+    }
 }

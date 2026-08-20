@@ -1,3 +1,13 @@
 <resources>
-    <string name="app_name">TouchLayoutApplication</string>
+    <string name="app_name">TouchLayout</string>
+    <string name="demo_title">TouchLayout Demo</string>
+    <string name="demo_subtitle">拖拽 · 缩放 · 多选 · 自动吸附</string>
+    <string name="demo_instruction">拖动卡片靠近画布或其他卡片边缘；点击后拖动四角可缩放。</string>
+    <string name="snap">吸附</string>
+    <string name="multiple_choice">多选</string>
+    <string name="reset">重置</string>
+    <string name="card_a">A</string>
+    <string name="card_b">B</string>
+    <string name="card_c">C</string>
+    <string name="card_d">D</string>
 </resources>

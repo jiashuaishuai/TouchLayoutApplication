@@ -7,4 +7,13 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="demo_page_background">#FFF8FAFC</color>
+    <color name="demo_canvas">#FFFFFFFF</color>
+    <color name="demo_canvas_border">#FFCBD5E1</color>
+    <color name="demo_title">#FF0F172A</color>
+    <color name="demo_secondary_text">#FF64748B</color>
+    <color name="demo_blue">#FF2563EB</color>
+    <color name="demo_green">#FF059669</color>
+    <color name="demo_orange">#FFEA580C</color>
+    <color name="demo_pink">#FFDB2777</color>
 </resources>
