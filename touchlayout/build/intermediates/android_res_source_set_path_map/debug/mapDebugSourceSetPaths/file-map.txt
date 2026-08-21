@@ -1,0 +1,9 @@
+com.jiashuai.touchlayout-pngs-0 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/generated/res/pngs/debug
+com.jiashuai.touchlayout-updated_navigation_xml-1 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/generated/updated_navigation_xml/debug
+com.jiashuai.touchlayout-mergeDebugResources-2 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/intermediates/incremental/debug/mergeDebugResources/merged.dir
+com.jiashuai.touchlayout-mergeDebugResources-3 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/intermediates/incremental/debug/mergeDebugResources/stripped.dir
+com.jiashuai.touchlayout-debug-4 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/intermediates/merged_res/debug/mergeDebugResources
+com.jiashuai.touchlayout-debug-5 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/build/intermediates/packaged_res/debug/packageDebugResources
+com.jiashuai.touchlayout-debug-6 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/src/debug/res
+com.jiashuai.touchlayout-main-7 /Users/jss/githubProject/TouchLayoutApplication/touchlayout/src/main/res
+gradleHome-0 /Users/jss/.gradle
